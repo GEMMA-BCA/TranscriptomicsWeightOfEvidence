@@ -19,13 +19,13 @@ option_list = list(
   
   make_option(c("-d", "--hallmark_database_file"), 
               type = "character", 
-              default="~/Dropbox/Luca/BCA-UniPd/Maci/WOE/Hallmark_database.gmt", 
+              default="Hallmark_database.gmt", 
               help="Name (and full path) of the hallmark database file that contains the Hallmark pathways and the genes that belong to each pathway. It can be a '.gmt' file or an Excel '.xlsx' file with two columns, named 'term' and 'gene' respectively [default= %default]", 
               metavar = "character"),
   
   make_option(c("-c","--hallmark_categories_file"), 
               type="character", 
-              default = "~/Dropbox/Luca/BCA-UniPd/Maci/WOE/Hallmark_categories_weights.xlsx", 
+              default = "Hallmark_categories_weights.xlsx", 
               help = "Name (and full path) of the file containing subdivision of Hallmark into categories and the weight of each hallmark [default=%default]", 
               metavar="character"),
   
