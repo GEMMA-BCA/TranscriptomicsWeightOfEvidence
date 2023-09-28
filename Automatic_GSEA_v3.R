@@ -17,15 +17,21 @@ option_list = list(
               help="Working directory where input files are stored", 
               metavar="character"),
   
+  make_option(c("-i", "--column_name"),
+              type = "character",
+              default = "Geneid",
+              help = "Column name in the .xlsx file that contains the ids in the ENSG* format [default= %default]",
+              metavar = "character"),
+  
   make_option(c("-d", "--hallmark_database_file"), 
               type = "character", 
-              default="Hallmark_database.gmt", 
+              default="~/Dropbox/Luca/BCA-UniPd/Maci/WOE/Hallmark_48_pathways.gmt", 
               help="Name (and full path) of the hallmark database file that contains the Hallmark pathways and the genes that belong to each pathway. It can be a '.gmt' file or an Excel '.xlsx' file with two columns, named 'term' and 'gene' respectively [default= %default]", 
               metavar = "character"),
   
   make_option(c("-c","--hallmark_categories_file"), 
               type="character", 
-              default = "Hallmark_categories_weights.xlsx", 
+              default = "~/Dropbox/Luca/BCA-UniPd/Maci/WOE/Hallmark_categories_weights.xlsx", 
               help = "Name (and full path) of the file containing subdivision of Hallmark into categories and the weight of each hallmark [default=%default]", 
               metavar="character"),
   
@@ -44,7 +50,7 @@ option_list = list(
 ); 
 
 # Example usage of the script:
-opt_parser = OptionParser(usage="usage: Rscript %prog --input_file_path Path_to_Input_files --output_folder Results/ --hallmark_database_file Path_to_hallmark_file/Hallmark.gmt --hallmark_categories_file Path_to_hallmark_weights/Hallmark_categories_weights.xlsx --input_file Experiment1.xlsx,Experiment2.xlsx,ExperimentN.xlsx",
+opt_parser = OptionParser(usage="usage: Rscript %prog --input_file_path Path_to_Input_files --column_name Geneid --output_folder Results/ --hallmark_database_file Path_to_hallmark_file/Hallmark.gmt --hallmark_categories_file Path_to_hallmark_weights/Hallmark_categories_weights.xlsx --input_file Experiment1.xlsx,Experiment2.xlsx,ExperimentN.xlsx",
                           option_list=option_list);
 
 # Parsing script options:
@@ -69,6 +75,7 @@ for (numerofile in c(1:length(inputfiles))){
   } else {
     inputdata=readxl::read_xlsx(input)
   }
+  inputdata = as.data.frame(inputdata)
   cat("The imported data contains ", dim(inputdata)[1], " genes\n")
   
   # Output folder:
@@ -83,9 +90,9 @@ for (numerofile in c(1:length(inputfiles))){
   org="org.Hs.eg.db"
   
   #Convert ids to symbols and fill "NAs":
-  dataconv=bitr(inputdata$Geneid, fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = org)
-  inputdata.symbol = merge(inputdata,dataconv, by.x="Geneid",by.y="ENSEMBL",all.x=TRUE)
-  inputdata.symbol$SYMBOL[is.na(inputdata.symbol$SYMBOL)] <- as.character(inputdata.symbol$Geneid)[is.na(inputdata.symbol$SYMBOL)]
+  dataconv=bitr(inputdata[,opt$column_name], fromType = "ENSEMBL", toType = "SYMBOL", OrgDb = org)
+  inputdata.symbol = merge(inputdata,dataconv, by.x = opt$column_name, by.y = "ENSEMBL",all.x=TRUE)
+  inputdata.symbol$SYMBOL[is.na(inputdata.symbol$SYMBOL)] <- as.character(inputdata.symbol[,opt$column_name])[is.na(inputdata.symbol$SYMBOL)]
   
   #Remove Geneid column and get summary of duplicated:
   inputdata.symbol = inputdata.symbol[,-1]
@@ -94,18 +101,18 @@ for (numerofile in c(1:length(inputfiles))){
   
   #Filter to keep highest |foldChange|:
   cat("Now removing duplicated IDs/Symbols...\n")
-  inputdata.final = inputdata.symbol %>% group_by(SYMBOL) %>% filter(FDR == min(FDR)) %>% filter(abs(logFC) == max(abs(logFC))) %>% ungroup
+  inputdata.final = inputdata.symbol %>% group_by(SYMBOL) %>% drop_na(FDR) %>% filter(FDR == min(FDR)) %>% filter(abs(logFC) == max(abs(logFC))) %>% ungroup
   inputdata.final = inputdata.final[order(inputdata.final$FDR),]
   inputdata.final = inputdata.final[!duplicated(inputdata.final$SYMBOL),]
   inputdata.final = data.frame(inputdata.final)
-  inputdata.final = inputdata.final[,c(6,1,2,3,4,5)]
+  #inputdata.final = inputdata.final[,c(6,1,2,3,4,5)]
   cat("\nDuplicated Symbols:\n")
   summary(duplicated(inputdata.final$SYMBOL))
   cat("\nThe dataframe (after removal of duplicated genes) now contains ", dim(inputdata.final)[1], " genes\n")
   
   #Create gene lists:
-  geneList_logFC <- inputdata.final[,2] #feature 1: numeric vector
-  names(geneList_logFC) <- as.character(inputdata.final[,1]) #feature 2: named vector
+  geneList_logFC <- inputdata.final[,"logFC"] #feature 1: numeric vector
+  names(geneList_logFC) <- as.character(inputdata.final[,"SYMBOL"]) #feature 2: named vector
   geneList_logFC <- sort(geneList_logFC, decreasing = TRUE) #feature 3: decreasing order
   geneList= geneList_logFC
   
@@ -148,7 +155,9 @@ for (numerofile in c(1:length(inputfiles))){
   for (process in levels(as.factor(Hallmark_categories$process))){ #General version for the entire analysis
     GSEA_subset = as.data.frame(Hallmark_categories[Hallmark_categories$process %in% process,]) # We perform GSEA by hallmark's categories
     GSEA_data = as.data.frame(hallmark[as.character(hallmark$term) %in% GSEA_subset$new_name,])
+    GSEA_data = droplevels(GSEA_data)
     cat("Analysing: ", process, "\n")
+    cat("Analysing the following pathways: ", levels(as.factor(GSEA_data$term)), "\n")
     customGSEA<- GSEA(geneList=geneList, 
                       TERM2GENE = GSEA_data, 
                       minGSSize = minsizeGS,
